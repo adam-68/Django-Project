@@ -1,0 +1,52 @@
+{% extends 'registration/base.html' %}
+{% load widget_tweaks %}
+{% load static %}
+{% block content %}
+    <div style="width: 500px; margin: auto;">
+        <form method="POST">
+            {% csrf_token %}
+           {% for hidden_field in form.hidden_fields %}
+              {{ hidden_field }}
+            {% endfor %}
+
+            {% if form.non_field_errors %}
+              <div class="alert alert-danger" role="alert">
+                {% for error in form.non_field_errors %}
+                  {{ error }}
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            {% for field in form.visible_fields %}
+              <div class="form-group">
+                {% if form.is_bound %}
+                  {% if field.errors %}
+                    {% render_field field class="form-control is-invalid" %}
+                    {% for error in field.errors %}
+                      <div class="invalid-feedback">
+                        {{ error }}
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    {% render_field field class="form-control is-valid" %}
+                  {% endif %}
+                {% else %}
+                  {% render_field field class="form-control" %}
+                {% endif %}
+
+                {% if field.help_text %}
+                  <small class="form-text text-muted">{{ field.help_text }}</small>
+                {% endif %}
+              </div>
+            {% endfor %}
+            <div class="col text-center">
+                <button type="submit"class="btn btn-primary">Login</button>
+            </div>
+
+        </form>
+        <hr>
+        <div class="col text-center">
+            <a href="{% url 'users:register' %}" class="btn btn-success" style="margin-top: 15px;">Create account</a>
+        </div>
+    </div>
+{% endblock content %}

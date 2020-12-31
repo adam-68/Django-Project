@@ -1,29 +1,43 @@
-from users.forms import SignUpForm, LoginForm
-from django.shortcuts import render, redirect
+from .forms import SignUpForm, LoginForm
+from django.shortcuts import render
+from django.contrib import messages
 from django.urls import reverse
-from django.http import HttpResponseRedirect, HttpResponse, Http404
-from django.template import TemplateDoesNotExist
-from django.contrib.auth.models import User
-from django.forms.models import model_to_dict
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponseRedirect, Http404
+from django.contrib.auth import login, authenticate
 from django.views import generic
+
 from django.shortcuts import get_object_or_404
-from .models import Profile
+from .models import Profile, CustomUser
 
 
-class RegistrationView(generic.CreateView):
+class RegistrationView(generic.FormView):
     template_name = 'registration/register_form.html'
     form_class = SignUpForm
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return HttpResponseRedirect(reverse('users:user_profile', args=(request.user,)))
+            return HttpResponseRedirect(reverse('users:user_profile', args=(request.user.profile.username,)))
         else:
-            return super(RegistrationView, self).dispatch(request, *args, **kwargs)
+            return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        if form.is_valid():
-            return super(RegistrationView, self).form_valid(form)
+        user = form.save()
+        user.refresh_from_db()
+        request = self.request
+        user.profile.username = form.cleaned_data['username']
+        user.profile.first_name = form.cleaned_data['first_name']
+        user.profile.last_name = form.cleaned_data['last_name']
+        user.profile.birth_date = form.cleaned_data['birth_date']
+        user.profile.email = form.cleaned_data['email']
+        user.save()
+
+        user = authenticate(request, email=user.email, password=form.cleaned_data['password1'])
+        login(request, user)
+        messages.success(request, ('You are successfully signed up!',))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('users:user_profile', args=(self.request.user.profile.username,))
 
 
 class HomePageView(generic.TemplateView):
@@ -31,33 +45,47 @@ class HomePageView(generic.TemplateView):
 
 
 class ProfileView(generic.DetailView):
-    model = User
+    model = CustomUser
     template_name = "registration/profile_page.html"
     slug_field = "username"
     slug_url_kwarg = "username"
-    context_object_name = "user"
 
     def get_object(self):
         user = get_object_or_404(Profile, user__username=self.kwargs['username'])
-        if self.request.user.username == user.user.username:
+        if user:
             return user
         else:
-            raise Http404
+            raise Http404('User does not exist.')
+
+    def get(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            messages.error(request, "User you are looking for does not exist.")
+            return render(request, "registration/profile_page.html", {"user": request.user, "profile": request.user.profile})
+        else:
+            return HttpResponseRedirect(reverse("users:login"))
 
 
-class LoginView(LoginRequiredMixin, RegistrationView):
+class UserLoginView(generic.FormView):
     template_name = 'registration/login.html'
-    model = Profile
     form_class = LoginForm
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return HttpResponseRedirect(reverse('users:user_profile', args=(request.user,)))
+            return HttpResponseRedirect(reverse('users:user_profile', args=(request.user.profile.username,)))
         else:
-            return super(LoginView, self).dispatch(request, *args, **kwargs)
+            return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        if form.is_valid():
-            return super(LoginView, self).form_valid(form)
+        user = form.clean()
+        if user:
+            user = authenticate(self.request, email=form.cleaned_data['email'], password=form.cleaned_data['password'])
+            login(self.request, user)
+            messages.success(self.request, ('You are successfully signed up!',))
+            return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('users:user_profile', args=(self.request.user.profile.username,))
+
+
 
 
